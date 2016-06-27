@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+
+<xmlparser version="string">
+	 <test1 t1v = "int" t2v = "int" t3v="string" container_="map" key_="t1v"/>
+	 <test2 id="int" name="string" container_="vector"/>
+	 <test3 num1="int" num2="long" num3="string"/>
+</xmlparser>
+

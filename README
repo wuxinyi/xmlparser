@@ -1,0 +1,6 @@
+将xml配置文件转化为内存数据结构 兼顾配置的灵活性和性能，同时将在后续提供加载到LUA ENV的接口
+使用方法：
+1：创建一个配置文件（xml/template.xml）
+2：创建一个模板文件（xml/template/template.xml）
+3: 运行tools/xmltool.py,将在src/先生成template.h，此文件基于tinyxml2加载xml配置到内存（后续将加载到LuaState）
+
