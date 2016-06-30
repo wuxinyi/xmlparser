@@ -1,17 +1,22 @@
  
 //--------------------------------------------------- 
 // 此文件由工具自动生成，请勿修改 
-//---------------------------------------------
-
+//---------------------------------------------------
 #include <vector>
 #include <string>
 #include <map>
 #include <utility>
-#include "../tinyxml2/tinyxml2.h"
+#include "tinyxml2.h"
+#include "attribute_parser.h"
+#include "lua.hpp"
+#include "lauxlib.h"
+#include "lualib.h"
 using namespace tinyxml2;
 
 
 namespace xml {
+  //XML-->CPP STRUCT
+  //this class can load xmlfiles to cpp struct and load them into computer memory
   struct XMLPARSER
   {
     bool load()
@@ -28,10 +33,10 @@ namespace xml {
     }
     
 
-    std::string  version;
+    std::string version;
     struct TEST1
     {
-      std::string  t3v;
+      std::string t3v;
       int t1v;
       int t2v;
       bool parse(const XMLElement* child)
@@ -41,19 +46,19 @@ namespace xml {
         attri = child->FindAttribute("t3v");
         if (attri)
         {
-          this->t3v = std::string(attri->Value());
+          this->t3v= Attribute_Parser<std::string>()(attri->Value());
         }
 
         attri = child->FindAttribute("t1v");
         if (attri)
         {
-          this->t1v = (int)atoi(attri->Value());
+          this->t1v= Attribute_Parser<int>()(attri->Value());
         }
 
         attri = child->FindAttribute("t2v");
         if (attri)
         {
-          this->t2v = (int)atoi(attri->Value());
+          this->t2v= Attribute_Parser<int>()(attri->Value());
         }
 
         return true;
@@ -64,7 +69,7 @@ namespace xml {
     struct TEST2
     {
       int id;
-      std::string  name;
+      std::string name;
       bool parse(const XMLElement* child)
       {
         if (!child) return false;
@@ -72,13 +77,13 @@ namespace xml {
         attri = child->FindAttribute("id");
         if (attri)
         {
-          this->id = (int)atoi(attri->Value());
+          this->id= Attribute_Parser<int>()(attri->Value());
         }
 
         attri = child->FindAttribute("name");
         if (attri)
         {
-          this->name = std::string(attri->Value());
+          this->name= Attribute_Parser<std::string>()(attri->Value());
         }
 
         return true;
@@ -90,7 +95,7 @@ namespace xml {
     {
       int num1;
       long num2;
-      std::string  num3;
+      std::string num3;
       bool parse(const XMLElement* child)
       {
         if (!child) return false;
@@ -98,19 +103,19 @@ namespace xml {
         attri = child->FindAttribute("num1");
         if (attri)
         {
-          this->num1 = (int)atoi(attri->Value());
+          this->num1= Attribute_Parser<int>()(attri->Value());
         }
 
         attri = child->FindAttribute("num2");
         if (attri)
         {
-          this->num2 = (long)atol(attri->Value());
+          this->num2= Attribute_Parser<long>()(attri->Value());
         }
 
         attri = child->FindAttribute("num3");
         if (attri)
         {
-          this->num3 = std::string(attri->Value());
+          this->num3= Attribute_Parser<std::string>()(attri->Value());
         }
 
         return true;
@@ -125,7 +130,7 @@ namespace xml {
       attri = child->FindAttribute("version");
       if (attri)
       {
-        this->version = std::string(attri->Value());
+        this->version= Attribute_Parser<std::string>()(attri->Value());
       }
 
       {
@@ -172,5 +177,235 @@ namespace xml {
       return true;
     }
   };
-static struct XMLPARSER xmlparser;
+  static struct XMLPARSER xmlparser;
+
+  //XML-->LUATABLE
+  //this class load xml file into LuaState, we can use config for example "xml.ta.tb.tc" in lua files
+  struct LUA_XMLPARSER
+  {
+    void doLoad2luaState(lua_State * L)
+    {
+      if (NULL == L)
+      {
+        return;
+      }
+      this->currL = L;
+      this->load();
+    }
+
+    bool load()
+    {
+      XMLDocument doc;
+      int ret = 0;
+      if((ret = doc.LoadFile("./xml/template.xml")) != XML_SUCCESS) {
+        return false;
+      }
+      bool ret_ = false;
+      XMLElement *ele = NULL;
+      ele = doc.FirstChildElement("xmlparser");
+      if (!ele) return false;
+      lua_getglobal(this->currL, "xml");
+      if (!lua_istable(this->currL, -1))
+      {
+        lua_pop(this->currL, 1);
+        lua_newtable(this->currL);
+        lua_setglobal(this->currL, "xml");
+        lua_getglobal(this->currL, "xml");
+        if (!lua_istable(this->currL,-1))
+        {
+          lua_pop(this->currL,1);
+          return false;
+        }
+      }
+      lua_pushstring(this->currL,"xmlparser");
+      lua_newtable(this->currL);
+      ret_ = this->parse(ele, this->currL);
+      lua_settable(this->currL, -3);
+      lua_pop(this->currL, 1);
+      return ret_;
+    }
+
+    bool parse(const XMLElement* child, lua_State * const L)
+    {
+      if (!child) return false;
+      const XMLAttribute* attri = NULL;
+      attri = child->FindAttribute("version");
+      if (attri)
+      {
+        lua_pushstring(L,"version");
+        lua_pushstring(L, Attribute_Parser<std::string>()(attri->Value()).c_str());
+        lua_settable(L,-3);
+      }
+
+      {
+        const XMLElement *ele_begin = NULL;
+        const XMLElement *ele_end = NULL;
+        ele_begin = child->FirstChildElement("test1");
+        ele_end   = child->LastChildElement("test1");
+        int id = 0;
+        while(ele_begin <= ele_end)
+        {
+          if (id == 0) {
+            lua_pushstring(L,"test1");
+            lua_newtable(L);
+          }
+          attri = ele_begin->FindAttribute("t1v");
+          if (attri) {
+            lua_pushinteger(L, Attribute_Parser<int>()(attri->Value()));
+            lua_newtable(L);
+            //recursive parse lua table!
+            this->test1.parse(ele_begin, L);
+            lua_settable(L, -3);
+          }
+          ++ ele_begin;
+          ++ id;
+          if (ele_begin > ele_end) {
+            lua_settable(L,-3);
+          }
+        }
+      }
+
+      {
+        const XMLElement *ele_begin = NULL;
+        const XMLElement *ele_end = NULL;
+        ele_begin = child->FirstChildElement("test2");
+        ele_end   = child->LastChildElement("test2");
+        int id = 0;
+        while(ele_begin <= ele_end)
+        {
+          if (id == 0) {
+            lua_pushstring(L,"test2");
+            lua_newtable(L);
+          }
+          lua_pushinteger(L,id+1);
+          lua_newtable(L);
+          //recursive parse lua table!
+          this->test2.parse(ele_begin, L);
+          lua_settable(L, -3);
+          ++ ele_begin;
+          ++ id;
+          if (ele_begin > ele_end) {
+            lua_settable(L,-3);
+          }
+        }
+      }
+
+      {
+        const XMLElement *ele_begin = NULL;
+        ele_begin = child->FirstChildElement("test3");
+        if (ele_begin)
+        {
+            lua_pushstring(L,"test3");
+            lua_newtable(L);
+            this->test3.parse(ele_begin, L);
+            lua_settable(L,-3);
+        }
+      }
+
+      return true;
+    }
+
+    struct LUA_TEST1
+    {
+      bool parse(const XMLElement* child, lua_State * const L)
+      {
+        if (!child) return false;
+        const XMLAttribute* attri = NULL;
+        attri = child->FindAttribute("t3v");
+        if (attri)
+        {
+          lua_pushstring(L,"t3v");
+          lua_pushstring(L, Attribute_Parser<std::string>()(attri->Value()).c_str());
+          lua_settable(L,-3);
+        }
+
+        attri = child->FindAttribute("t1v");
+        if (attri)
+        {
+          lua_pushstring(L,"t1v");
+          lua_pushinteger(L, Attribute_Parser<int>()(attri->Value()));
+          lua_settable(L,-3);
+        }
+
+        attri = child->FindAttribute("t2v");
+        if (attri)
+        {
+          lua_pushstring(L,"t2v");
+          lua_pushinteger(L, Attribute_Parser<int>()(attri->Value()));
+          lua_settable(L,-3);
+        }
+
+        return true;
+      }
+
+    };
+    struct LUA_TEST1 test1;
+
+    struct LUA_TEST2
+    {
+      bool parse(const XMLElement* child, lua_State * const L)
+      {
+        if (!child) return false;
+        const XMLAttribute* attri = NULL;
+        attri = child->FindAttribute("id");
+        if (attri)
+        {
+          lua_pushstring(L,"id");
+          lua_pushinteger(L, Attribute_Parser<int>()(attri->Value()));
+          lua_settable(L,-3);
+        }
+
+        attri = child->FindAttribute("name");
+        if (attri)
+        {
+          lua_pushstring(L,"name");
+          lua_pushstring(L, Attribute_Parser<std::string>()(attri->Value()).c_str());
+          lua_settable(L,-3);
+        }
+
+        return true;
+      }
+
+    };
+    struct LUA_TEST2 test2;
+
+    struct LUA_TEST3
+    {
+      bool parse(const XMLElement* child, lua_State * const L)
+      {
+        if (!child) return false;
+        const XMLAttribute* attri = NULL;
+        attri = child->FindAttribute("num1");
+        if (attri)
+        {
+          lua_pushstring(L,"num1");
+          lua_pushinteger(L, Attribute_Parser<int>()(attri->Value()));
+          lua_settable(L,-3);
+        }
+
+        attri = child->FindAttribute("num2");
+        if (attri)
+        {
+          lua_pushstring(L,"num2");
+          lua_pushinteger(L, Attribute_Parser<long>()(attri->Value()));
+          lua_settable(L,-3);
+        }
+
+        attri = child->FindAttribute("num3");
+        if (attri)
+        {
+          lua_pushstring(L,"num3");
+          lua_pushstring(L, Attribute_Parser<std::string>()(attri->Value()).c_str());
+          lua_settable(L,-3);
+        }
+
+        return true;
+      }
+
+    };
+    struct LUA_TEST3 test3;
+
+    lua_State *currL;
+  };
+  static struct LUA_XMLPARSER lua_xmlparser;
 }

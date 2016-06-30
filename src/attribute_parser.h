@@ -2,7 +2,9 @@
 #define _BASE_H_
 
 #include  <string>
-#include <stdlib.h>
+#include	<stdlib.h>
+
+using namespace std;
 
 template <typename T>
 struct Attribute_Parser
