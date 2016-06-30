@@ -7,13 +7,16 @@ import os
 TemplateHead = """ 
 //--------------------------------------------------- 
 // 此文件由工具自动生成，请勿修改 
-//---------------------------------------------
-
+//---------------------------------------------------
 #include <vector>
 #include <string>
 #include <map>
 #include <utility>
-#include "../tinyxml2/tinyxml2.h"
+#include "tinyxml2.h"
+#include "attribute_parser.h"
+#include "lua.hpp"
+#include "lauxlib.h"
+#include "lualib.h"
 using namespace tinyxml2;
 
 """
@@ -64,7 +67,7 @@ class XmlParser:
 		label = label.strip() #remove blank 
 		# types map 
 		values = {
-			'string':'std::string ',
+			'string':'std::string',
 			'int':'int',
 			'unsigned int':'unsigned int',
 			'long':'long',
@@ -79,26 +82,6 @@ class XmlParser:
 			return values[label]
 		else:
 			return ""
-
-	def parse_value(self, v, vtype):
-		vtype = vtype.strip()
-		values = {
-  	'string':'std::string(',
-  	'int':'(int)atoi(',
-  	'unsigned int':'(unsigned int)atoi(',
-  	'long':'(long)atol(',
-  	'unsigned long':'(unsigned long)atol(',
-  	'long long int': '(long long int)atol(',
-  	'unsigned long long int':'(unsigned long long int)atol(',
-  	'float':'(float)atof(',
-  	'double':'(double)atof(',
-		}
-
-		if values.has_key(vtype):
-			temp_content = 'this->' + v + ' = ' + values[vtype] + 'attri->Value());'
-			return temp_content
-		else:
-			return '' 
 
 	def parse_and_generator_cppfiles(self,templatepath,cppdirpath):
 		"""parse xml and generator cpp files"""
@@ -121,12 +104,11 @@ class XmlParser:
 		cppfilename = cppdirpath + path_slice + '.h' 
 		cppfile = open(cppfilename,'w')	
 
-		# for node in root.childNodes:
-		#	if node.nodeType == node.ELEMENT_NODE:
 		self.dump_str2cppfile(cppfile,blank,TemplateHead)
 		self.dump_str2cppfile(cppfile,blank, 'namespace xml {')
 		self.parse_node(root, cppfile, blank+2, 1)					
-		self.dump_str2cppfile(cppfile,blank,'static struct ' + root.nodeName.upper() + ' ' + root.nodeName + ';')
+		self.dump_str2cppfile(cppfile,blank+2,'static struct ' + root.nodeName.upper() + ' ' + root.nodeName + ';\n')
+		self.parse_for_lua(root, cppfile, blank)
 		self.dump_str2cppfile(cppfile,blank,'}')
 		cppfile.close()
 
@@ -145,12 +127,10 @@ class XmlParser:
 			attribute_value = attribute.value.strip() 
 			if attribute_name == 'container_' or attribute_name == 'key_':
 				continue
-			temp_content = 'attri = child->FindAttribute("' + attribute_name + '");'
-			self.dump_str2cppfile(cppfile, blank+2, temp_content)
+			self.dump_str2cppfile(cppfile, blank+2, 'attri = child->FindAttribute("' + attribute_name + '");')
 			self.dump_str2cppfile(cppfile, blank+2, 'if (attri)')
 			self.dump_str2cppfile(cppfile, blank+2, '{')	
-			temp_content = self.parse_value(attribute_name, attribute_value)
-			self.dump_str2cppfile(cppfile, blank+4,temp_content)
+			self.dump_str2cppfile(cppfile,blank+4, 'this->' + attribute_name + '= Attribute_Parser<'+ self.parse_label(attribute_value) + '>()(attri->Value());')
 			self.dump_str2cppfile(cppfile, blank+2, '}\n') 
 
 		#then parse children nodes
@@ -167,18 +147,14 @@ class XmlParser:
 				self.dump_str2cppfile(cppfile, blank+2, '{')		
 				self.dump_str2cppfile(cppfile, blank+4,'const XMLElement *ele_begin = NULL;')
 				self.dump_str2cppfile(cppfile, blank+4,'const XMLElement *ele_end = NULL;')
-				temp_content = 'ele_begin = child->FirstChildElement("'+ subnode.nodeName + '");'
-				self.dump_str2cppfile(cppfile, blank+4, temp_content)
-				temp_content = 'ele_end   = child->LastChildElement("' + subnode.nodeName + '");'
-				self.dump_str2cppfile(cppfile, blank+4, temp_content)				
+				self.dump_str2cppfile(cppfile, blank+4,'ele_begin = child->FirstChildElement("'+ subnode.nodeName + '");')
+				self.dump_str2cppfile(cppfile, blank+4, 'ele_end   = child->LastChildElement("' + subnode.nodeName + '");')				
  				self.dump_str2cppfile(cppfile, blank+4, 'while(ele_begin <= ele_end)')
 				self.dump_str2cppfile(cppfile, blank+4, '{')
-				temp_content = 'struct ' + container_name.upper() + ' temp_;';
-				self.dump_str2cppfile(cppfile, blank+6, temp_content)			
+				self.dump_str2cppfile(cppfile, blank+6, 'struct ' + container_name.upper() + ' temp_;')			
 				self.dump_str2cppfile(cppfile, blank+6, 'if (temp_.parse(ele_begin))')
 				self.dump_str2cppfile(cppfile, blank+6, '{')
-				temp_content = 'this->'+subnode.nodeName+'.insert(std::pair<' + self.parse_label(container_key_type) + ', struct ' + container_name.upper() + '>(' + 'temp_.'+ container_key_name + ', temp_));'
-				self.dump_str2cppfile(cppfile, blank+8, temp_content)
+				self.dump_str2cppfile(cppfile, blank+8,  'this->'+subnode.nodeName+'.insert(std::pair<' + self.parse_label(container_key_type) + ', struct ' + container_name.upper() + '>(' + 'temp_.'+ container_key_name + ', temp_));')
 				self.dump_str2cppfile(cppfile, blank+6, '}')					 
 				self.dump_str2cppfile(cppfile, blank+6, '++ ele_begin;')	
 				self.dump_str2cppfile(cppfile, blank+4, '}')
@@ -188,18 +164,14 @@ class XmlParser:
 				self.dump_str2cppfile(cppfile, blank+2, '{')		
 				self.dump_str2cppfile(cppfile, blank+4,'const XMLElement *ele_begin = NULL;')
 				self.dump_str2cppfile(cppfile, blank+4,'const XMLElement *ele_end = NULL;')
-				temp_content = 'ele_begin = child->FirstChildElement("'+ subnode.nodeName + '");'
-				self.dump_str2cppfile(cppfile, blank+4, temp_content)
-				temp_content = 'ele_end   = child->LastChildElement("' + subnode.nodeName + '");'
-				self.dump_str2cppfile(cppfile, blank+4, temp_content)				
+				self.dump_str2cppfile(cppfile, blank+4,'ele_begin = child->FirstChildElement("'+ subnode.nodeName + '");')
+				self.dump_str2cppfile(cppfile, blank+4,'ele_end   = child->LastChildElement("' + subnode.nodeName + '");')				
  				self.dump_str2cppfile(cppfile, blank+4, 'while(ele_begin <= ele_end)')
 				self.dump_str2cppfile(cppfile, blank+4, '{')
-				temp_content = 'struct ' + container_name.upper() + ' temp_;';
-				self.dump_str2cppfile(cppfile, blank+6, temp_content)			
+				self.dump_str2cppfile(cppfile, blank+6, 'struct ' + container_name.upper() + ' temp_;')			
 				self.dump_str2cppfile(cppfile, blank+6, 'if (temp_.parse(ele_begin))')
 				self.dump_str2cppfile(cppfile, blank+6, '{')
-				temp_content = 'this->'+subnode.nodeName+'.push_back(temp_);'
-				self.dump_str2cppfile(cppfile, blank+8, temp_content)
+				self.dump_str2cppfile(cppfile, blank+8, 'this->'+subnode.nodeName+'.push_back(temp_);')
 				self.dump_str2cppfile(cppfile, blank+6, '}')					 
 				self.dump_str2cppfile(cppfile, blank+6, '++ ele_begin;')	
 				self.dump_str2cppfile(cppfile, blank+4, '}')
@@ -208,12 +180,10 @@ class XmlParser:
 				container_name = subnode.nodeName.strip()
 				self.dump_str2cppfile(cppfile, blank+2, '{')
 				self.dump_str2cppfile(cppfile, blank+4,'const XMLElement *ele_begin = NULL;')
-				temp_content = 'ele_begin = child->FirstChildElement("'+ subnode.nodeName + '");'
-				self.dump_str2cppfile(cppfile, blank+4, temp_content)
+				self.dump_str2cppfile(cppfile, blank+4, 'ele_begin = child->FirstChildElement("'+ subnode.nodeName + '");')
 				self.dump_str2cppfile(cppfile, blank+4, 'if (ele_begin)')
 				self.dump_str2cppfile(cppfile, blank+4, '{')
-				temp_content  = 'this->'+container_name + '.parse(ele_begin);'
-				self.dump_str2cppfile(cppfile, blank+6, temp_content)
+				self.dump_str2cppfile(cppfile, blank+6, 'this->'+container_name + '.parse(ele_begin);')
 				self.dump_str2cppfile(cppfile, blank+4, '}')
 				self.dump_str2cppfile(cppfile, blank+2, '}\n')
 
@@ -226,8 +196,7 @@ class XmlParser:
 		self.dump_str2cppfile(cppfile,blank,'{')
 		self.dump_str2cppfile(cppfile,blank+2,'XMLDocument doc;')
 		self.dump_str2cppfile(cppfile,blank+2,'int ret = 0;')
-		temp_content = 'if((ret = doc.LoadFile("' + filepath + '")) != XML_SUCCESS) {'
-		self.dump_str2cppfile(cppfile, blank+2, temp_content)	
+		self.dump_str2cppfile(cppfile, blank+2, 'if((ret = doc.LoadFile("' + filepath + '")) != XML_SUCCESS) {')	
 		self.dump_str2cppfile(cppfile, blank+4, 'return false;')
 		self.dump_str2cppfile(cppfile,blank+2,'}')
 		self.dump_str2cppfile(cppfile, blank+2, 'XMLElement *ele = NULL;')
@@ -239,6 +208,10 @@ class XmlParser:
 		
 	def parse_node(self, node, cppfile, blank, isroot = 0):
 		"""parse xml node: parse attribute first, then children nodes"""
+		if isroot == 1:
+			self.dump_str2cppfile(cppfile, blank, '//XML-->CPP STRUCT')
+			self.dump_str2cppfile(cppfile, blank, '//this class can load xmlfiles to cpp struct and load them into computer memory')
+
 		#dump struct name
 		node_name = node.nodeName
 		self.dump_str2cppfile(cppfile, blank, 'struct ' + node_name.upper());	 	 			
@@ -286,6 +259,216 @@ class XmlParser:
 
 		self.parse_node_generator_parsefunc(node,cppfile,blank+2)
 		self.dump_str2cppfile(cppfile, blank, '};')
+
+    #Parse xml config for Lua
+
+	def generate_lua_load_function(self, cppfile, filepath, nodename, blank):
+		temp_content = 'bool load()'
+		self.dump_str2cppfile(cppfile, blank, temp_content)
+		self.dump_str2cppfile(cppfile,blank,'{')
+		self.dump_str2cppfile(cppfile,blank+2,'XMLDocument doc;')
+		self.dump_str2cppfile(cppfile,blank+2,'int ret = 0;')
+		self.dump_str2cppfile(cppfile, blank+2, 'if((ret = doc.LoadFile("' + filepath + '")) != XML_SUCCESS) {')	
+		self.dump_str2cppfile(cppfile, blank+4, 'return false;')
+		self.dump_str2cppfile(cppfile,blank+2,'}')
+		self.dump_str2cppfile(cppfile, blank+2, 'bool ret_ = false;')	
+		self.dump_str2cppfile(cppfile, blank+2, 'XMLElement *ele = NULL;')
+		self.dump_str2cppfile(cppfile, blank+2,'ele = doc.FirstChildElement("' + nodename + '");')
+		self.dump_str2cppfile(cppfile, blank+2, 'if (!ele) return false;')
+		self.dump_str2cppfile(cppfile, blank+2, 'lua_getglobal(this->currL, "xml");')
+		self.dump_str2cppfile(cppfile, blank+2, 'if (!lua_istable(this->currL, -1))')
+		self.dump_str2cppfile(cppfile, blank+2, '{')
+		self.dump_str2cppfile(cppfile, blank+4, 'lua_pop(this->currL, 1);')
+		self.dump_str2cppfile(cppfile, blank+4, 'lua_newtable(this->currL);')
+		self.dump_str2cppfile(cppfile, blank+4, 'lua_setglobal(this->currL, "xml");')
+		self.dump_str2cppfile(cppfile, blank+4, 'lua_getglobal(this->currL, "xml");')
+		self.dump_str2cppfile(cppfile, blank+4, 'if (!lua_istable(this->currL,-1))')
+		self.dump_str2cppfile(cppfile, blank+4, '{')
+		self.dump_str2cppfile(cppfile, blank+6, 'lua_pop(this->currL,1);')
+		self.dump_str2cppfile(cppfile, blank+6, 'return false;')
+		self.dump_str2cppfile(cppfile, blank+4, '}')
+		self.dump_str2cppfile(cppfile, blank+2, '}')
+		self.dump_str2cppfile(cppfile, blank+2, 'lua_pushstring(this->currL,"' + nodename +'");')
+		self.dump_str2cppfile(cppfile, blank+2, 'lua_newtable(this->currL);')
+		self.dump_str2cppfile(cppfile, blank+2, 'ret_ = this->parse(ele, this->currL);')
+		self.dump_str2cppfile(cppfile, blank+2, 'lua_settable(this->currL, -3);')
+		self.dump_str2cppfile(cppfile, blank+2, 'lua_pop(this->currL, 1);')
+		self.dump_str2cppfile(cppfile, blank+2, 'return ret_;')
+		self.dump_str2cppfile(cppfile, blank, '}\n')
+
+	def Lpush_prefix(self, typename):
+		"""parse key word of xml template"""
+		label = typename.strip() #remove blank 
+		# types map 
+		values = {
+			'string':'lua_pushstring',
+			'int':'lua_pushinteger',
+			'unsigned int':'lua_pushinteger',
+			'long':'lua_pushinteger',
+			'unsigned long':'lua_pushinteger',
+			'long long int': 'lua_pushinteger',
+			'unsigned long long int':'lua_pushinteger',
+			'float':'lua_pushnumber',
+			'double':'lua_pushnumber',
+		}	 
+
+		if values.has_key(label):
+			return values[label]
+		else:
+			return ""
+
+	def Lparse_node(self, node, blank, cppfile, isroot = 0):
+		# first parse attributes
+		if isroot == 1:
+			self.dump_str2cppfile(cppfile, blank, '//XML-->LUATABLE')
+			self.dump_str2cppfile(cppfile, blank, '//this class load xml file into LuaState, we can use config for example "xml.ta.tb.tc" in lua files')
+			
+		node_name = node.nodeName
+		self.dump_str2cppfile(cppfile, blank, 'struct LUA_'+node.nodeName.upper())
+		self.dump_str2cppfile(cppfile, blank, '{')
+		if isroot == 1:
+			self.dump_str2cppfile(cppfile, blank+2, 'void doLoad2luaState(lua_State * L)')
+			self.dump_str2cppfile(cppfile, blank+2, '{')
+			self.dump_str2cppfile(cppfile, blank+4, 'if (NULL == L)')	
+			self.dump_str2cppfile(cppfile, blank+4, '{')
+			self.dump_str2cppfile(cppfile, blank+6, 'return;')	
+			self.dump_str2cppfile(cppfile, blank+4, '}')
+			self.dump_str2cppfile(cppfile, blank+4, 'this->currL = L;')	
+			self.dump_str2cppfile(cppfile, blank+4, 'this->load();')
+			self.dump_str2cppfile(cppfile, blank+2, '}\n')
+			self.generate_lua_load_function(cppfile, self.currxmlpath, node_name, blank+2)
+		self.Lparse_node_generator_parsefunc(node, cppfile, blank+2)		#generator parse function
+		
+		for subnode in node.childNodes:
+			if subnode.nodeType != subnode.ELEMENT_NODE:
+				continue
+			self.Lparse_node(subnode,blank+2,cppfile)
+			self.dump_str2cppfile(cppfile, blank+2, 'struct ' + 'LUA_'+subnode.nodeName.upper()+' '+subnode.nodeName+';\n')
+
+		if isroot == 1:		
+			self.dump_str2cppfile(cppfile, blank+2, 'lua_State *currL;')
+		self.dump_str2cppfile(cppfile, blank, '};')
+	
+
+	def Lparse_node_generator_parsefunc(self,node,cppfile,blank):	
+
+		self.dump_str2cppfile(cppfile, blank, 'bool parse(const XMLElement* child, lua_State * const L)')
+		self.dump_str2cppfile(cppfile, blank,'{')
+		self.dump_str2cppfile(cppfile, blank+2,'if (!child) return false;')
+		self.dump_str2cppfile(cppfile, blank+2, 'const XMLAttribute* attri = NULL;')
+	
+		#parse attribute firstly			
+		attribute_keys = node.attributes.keys()
+		for attribute_key in attribute_keys:
+			attribute      = node.attributes[attribute_key]
+			attribute_name  = attribute.name.strip() 
+			attribute_value = attribute.value.strip() 
+			if attribute_name == 'container_' or attribute_name == 'key_':
+				continue
+			self.dump_str2cppfile(cppfile, blank+2, 'attri = child->FindAttribute("' + attribute_name + '");')
+			self.dump_str2cppfile(cppfile, blank+2, 'if (attri)')
+			self.dump_str2cppfile(cppfile, blank+2, '{')	
+			self.dump_str2cppfile(cppfile, blank+4, 'lua_pushstring(L,"' +attribute_name + '");')
+			if attribute_value == 'string':
+				self.dump_str2cppfile(cppfile, blank+4,  self.Lpush_prefix(attribute_value)+ '(L, Attribute_Parser<' + self.parse_label(attribute_value)+'>()(attri->Value()).c_str());')
+			else:
+				self.dump_str2cppfile(cppfile, blank+4,  self.Lpush_prefix(attribute_value)+ '(L, Attribute_Parser<' + self.parse_label(attribute_value)+'>()(attri->Value()));')	
+			self.dump_str2cppfile(cppfile, blank+4,  'lua_settable(L,-3);')
+			self.dump_str2cppfile(cppfile, blank+2, '}\n') 
+
+    #parse node
+		for subnode in node.childNodes:
+		#recursive parse
+			if subnode.nodeType != subnode.ELEMENT_NODE:
+				continue
+			container_type = subnode.getAttribute('container_')
+			# parse map node
+			if container_type == 'map':
+				container_name       = subnode.nodeName.strip()
+				container_key_name   = subnode.getAttribute('key_')
+				container_key_type   = subnode.getAttribute(container_key_name)
+				container_key_type   = container_key_type.strip()
+					
+				self.dump_str2cppfile(cppfile, blank+2, '{')		
+				self.dump_str2cppfile(cppfile, blank+4,'const XMLElement *ele_begin = NULL;')
+				self.dump_str2cppfile(cppfile, blank+4,'const XMLElement *ele_end = NULL;')
+				self.dump_str2cppfile(cppfile, blank+4,'ele_begin = child->FirstChildElement("'+ subnode.nodeName + '");')
+				self.dump_str2cppfile(cppfile, blank+4, 'ele_end   = child->LastChildElement("' + subnode.nodeName + '");')				
+				self.dump_str2cppfile(cppfile, blank+4, 'int id = 0;')
+ 				self.dump_str2cppfile(cppfile, blank+4, 'while(ele_begin <= ele_end)')
+				self.dump_str2cppfile(cppfile, blank+4, '{')
+				self.dump_str2cppfile(cppfile, blank+6, 'if (id == 0) {')
+				self.dump_str2cppfile(cppfile, blank+8, 'lua_pushstring(L,"'+subnode.nodeName+'");')	
+				self.dump_str2cppfile(cppfile, blank+8, 'lua_newtable(L);')				
+				self.dump_str2cppfile(cppfile, blank+6, '}')
+				self.dump_str2cppfile(cppfile, blank+6, 'attri = ele_begin->FindAttribute("' + container_key_name + '");')
+				self.dump_str2cppfile(cppfile, blank+6, 'if (attri) {')
+				if container_key_type == 'string':
+					self.dump_str2cppfile(cppfile, blank+8, self.Lpush_prefix(container_key_type)+'(L, Attribute_Parser<' + self.parse_label(container_key_type)+'>()(attri->Value()).c_str());')	
+				else:
+					self.dump_str2cppfile(cppfile, blank+8, self.Lpush_prefix(container_key_type)+'(L, Attribute_Parser<' + self.parse_label(container_key_type)+'>()(attri->Value()));')		
+				self.dump_str2cppfile(cppfile, blank+8, 'lua_newtable(L);')	
+				self.dump_str2cppfile(cppfile, blank+8, '//recursive parse lua table!')
+				self.dump_str2cppfile(cppfile, blank+8, 'this->'+subnode.nodeName+'.parse(ele_begin, L);')	
+				self.dump_str2cppfile(cppfile, blank+8, 'lua_settable(L, -3);')
+				self.dump_str2cppfile(cppfile, blank+6, '}')
+				self.dump_str2cppfile(cppfile, blank+6, '++ ele_begin;')	
+				self.dump_str2cppfile(cppfile, blank+6, '++ id;')
+				self.dump_str2cppfile(cppfile, blank+6, 'if (ele_begin > ele_end) {')
+				self.dump_str2cppfile(cppfile, blank+8, 'lua_settable(L,-3);')		
+				self.dump_str2cppfile(cppfile, blank+6, '}')
+				self.dump_str2cppfile(cppfile, blank+4, '}')
+				self.dump_str2cppfile(cppfile, blank+2, '}\n') 
+      #parse vector node
+			elif container_type == 'vector':
+				container_name = subnode.nodeName.strip()
+				self.dump_str2cppfile(cppfile, blank+2, '{')		
+				self.dump_str2cppfile(cppfile, blank+4,'const XMLElement *ele_begin = NULL;')
+				self.dump_str2cppfile(cppfile, blank+4,'const XMLElement *ele_end = NULL;')
+				self.dump_str2cppfile(cppfile, blank+4,'ele_begin = child->FirstChildElement("'+ subnode.nodeName + '");')
+				self.dump_str2cppfile(cppfile, blank+4,'ele_end   = child->LastChildElement("' + subnode.nodeName + '");')				
+				self.dump_str2cppfile(cppfile, blank+4,'int id = 0;')
+ 				self.dump_str2cppfile(cppfile, blank+4, 'while(ele_begin <= ele_end)')
+				self.dump_str2cppfile(cppfile, blank+4, '{')
+				self.dump_str2cppfile(cppfile, blank+6, 'if (id == 0) {')
+				self.dump_str2cppfile(cppfile, blank+8, 'lua_pushstring(L,"'+subnode.nodeName+'");')	
+				self.dump_str2cppfile(cppfile, blank+8, 'lua_newtable(L);')				
+				self.dump_str2cppfile(cppfile, blank+6, '}')	
+			 	self.dump_str2cppfile(cppfile, blank+6, 'lua_pushinteger(L,id+1);')
+				self.dump_str2cppfile(cppfile, blank+6,	'lua_newtable(L);')	
+				self.dump_str2cppfile(cppfile, blank+6, '//recursive parse lua table!')
+				self.dump_str2cppfile(cppfile, blank+6, 'this->'+subnode.nodeName+'.parse(ele_begin, L);')	
+				self.dump_str2cppfile(cppfile, blank+6, 'lua_settable(L, -3);')
+				self.dump_str2cppfile(cppfile, blank+6, '++ ele_begin;')	
+				self.dump_str2cppfile(cppfile, blank+6, '++ id;')	
+				self.dump_str2cppfile(cppfile, blank+6, 'if (ele_begin > ele_end) {')
+				self.dump_str2cppfile(cppfile, blank+8, 'lua_settable(L,-3);')		
+				self.dump_str2cppfile(cppfile, blank+6, '}')	
+				self.dump_str2cppfile(cppfile, blank+4, '}')
+				self.dump_str2cppfile(cppfile, blank+2, '}\n') 
+  		#parse normal node
+			else:
+				container_name = subnode.nodeName.strip()
+				self.dump_str2cppfile(cppfile, blank+2, '{')
+				self.dump_str2cppfile(cppfile, blank+4,'const XMLElement *ele_begin = NULL;')
+				self.dump_str2cppfile(cppfile, blank+4, 'ele_begin = child->FirstChildElement("'+ subnode.nodeName + '");')
+				self.dump_str2cppfile(cppfile, blank+4, 'if (ele_begin)')
+				self.dump_str2cppfile(cppfile, blank+4, '{')
+				self.dump_str2cppfile(cppfile, blank+8, 'lua_pushstring(L,"'+subnode.nodeName+'");')	
+				self.dump_str2cppfile(cppfile, blank+8, 'lua_newtable(L);')				
+				self.dump_str2cppfile(cppfile, blank+8, 'this->'+subnode.nodeName+'.parse(ele_begin, L);')	
+				self.dump_str2cppfile(cppfile, blank+8, 'lua_settable(L,-3);')		
+				self.dump_str2cppfile(cppfile, blank+4, '}')
+				self.dump_str2cppfile(cppfile, blank+2, '}\n')
+
+		self.dump_str2cppfile(cppfile, blank+2,'return true;')	
+		self.dump_str2cppfile(cppfile, blank,'}\n')
+	
+	def parse_for_lua(self, root, cppfile, blank):
+		nodename = root.nodeName
+		self.Lparse_node(root, blank+2, cppfile, 1)		
+		self.dump_str2cppfile(cppfile, blank+2, 'static struct LUA_'+nodename.upper() + ' lua_'+nodename+';')	
+
 	
 if __name__ == '__main__':
 	dirname = '../xml/template/'
@@ -295,4 +478,3 @@ if __name__ == '__main__':
 
 	for line in parser.xmlfiles_:
 		parser.parse_and_generator_cppfiles(line,'../src/')
-
