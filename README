@@ -4,3 +4,110 @@
 2：创建一个模板文件（xml/template/template.xml）
 3: 运行tools/xmltool.py,将在src/先生成template.h，此文件基于tinyxml2加载xml配置到内存（后续将加载到LuaState）
 
+
+XMLfile:
+
+<xmlparser version="1.0.0">
+
+   <test1 t1v = '1' t2v = "123" t3v="223"/>
+   <test1 t1v = '2' t2v = "223" t3v="223"/>
+   <test1 t1v = '3' t2v = "323" t3v="323"/>
+   <test1 t1v = '4' t2v = "423" t3v="423"/>
+
+   <test2 id="1" name="1111">
+      <testn id="1" name="wu"/>
+      <testn id="2" name="xin"/>
+      <testn id="3" name="yi"/>
+   </test2>
+   <test2 id="2" name="2222"/>
+   <test2 id="3" name="3333"/>
+
+
+   <test3 num1="100" num2="10000" num3="hello world">
+      <test3n id="1"/>
+      <test3n id="2"/>
+      <test3n id="3"/>
+   </test3>
+
+   <test2 id="4" name="44444"/>
+
+
+</xmlparser>
+
+
+How to use in C++:
+
+if (!xml::xmlparser.load())
+{
+  std::cout << "加载失败" << std::endl;
+  return 1;
+}
+
+std::cout << "------------------------- C++ ------------------------------------" << std::endl;
+for (auto &v : xml::xmlparser.test1)
+{
+  std::cout << v.second.t1v << " " <<  v.second.t2v << " " << v.second.t3v << std::endl;
+}
+
+for (auto &v : xml::xmlparser.test2)
+{
+  std::cout << v.id << " " <<  v.name << std::endl;
+  std::cout << "------" << std::endl;
+  for(xml::XMLPARSER::TEST2::TESTN_ConstIt it = v.testn.cbegin(); it != v.testn.cend(); ++it)
+  {
+    std::cout << it->second.id << " " << it->second.name << std::endl << std::endl;
+  }
+}
+std::cout << xml::xmlparser.test3.num1 << " " << xml::xmlparser.test3.num2 << " " << xml::xmlparser.test3.num3 << std::endl;
+
+OUT PUT:
+ ------------------------- C++ ------------------------------------
+1 123 223
+2 223 223
+3 323 323
+4 423 423
+1 1111
+------
+1 wu
+
+2 xin
+
+3 yi
+
+2 2222
+------
+3 3333
+------
+4 44444
+------
+100 10000 hello world
+
+
+
+How to use in Lua:
+
+print(xml.xmlparser.version)
+print(xml.xmlparser.test1[1].t1v)
+print(xml.xmlparser.test1[1].t2v)
+print(xml.xmlparser.test1[1].t3v)
+
+print(xml.xmlparser.test2[1].testn[1].id)
+print(xml.xmlparser.test2[1].testn[1].name)
+
+print(xml.xmlparser.test3.num1)
+print(xml.xmlparser.test3.num2)
+print(xml.xmlparser.test3.num3)
+
+
+
+OUT PUT:
+
+1.0.0
+1
+123
+223
+1
+wu
+100
+10000
+hello world
