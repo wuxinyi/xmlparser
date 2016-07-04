@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+
+<test>
+ <skill id='11' name="吸星"/>
+ <skill id='22' name="护体"/>
+ <skill id='33' name="连雷"/>
+ <skill id='44' name="毒咒"/>
+ <skill id='55' name="凝神"/>
+ <skill id='66' name="奔雷"/>
+</test>
+

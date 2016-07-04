@@ -10,3 +10,7 @@ print(xml.xmlparser.test3.num1)
 print(xml.xmlparser.test3.num2)
 print(xml.xmlparser.test3.num3)
 
+for k,v in pairs(xml.test.skill) do
+		print(tostring(v.id) .. ":" .. v.name)
+end
+

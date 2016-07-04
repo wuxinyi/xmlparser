@@ -2,15 +2,11 @@
 
 <xmlparser version="string">
 	 <test1 t1v = "int" t2v = "int" t3v="string" container_="map" key_="t1v"/>
-
-      
 	 <test2 id="int" name="string" container_="vector">
-	 		<testn id="int" name="string" container_="map" key_="id"/>
+		 <testn id="int" name="string" container_="map" key_="id"/>
    </test2>
-  
 	 <test3 num1="int" num2="long" num3="string">
-		 <test3n id="int" container_="map" key_="id"/>
+     <test3n id="int" container_="vector"/>
    </test3>
-
 </xmlparser>
 

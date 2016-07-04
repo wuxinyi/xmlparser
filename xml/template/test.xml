@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<test>
+  <skill id="int" name="string" container_="map" key_="id"/>
+</test>

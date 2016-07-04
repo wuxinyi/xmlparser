@@ -1,5 +1,6 @@
 #include "tinyxml2.h"
 #include "template.h"
+#include "test.h"
 #include <stdio.h>
 #include <iostream>
 #include "lua.hpp"
@@ -33,10 +34,23 @@ int main()
 	}
 	std::cout << xml::xmlparser.test3.num1 << " " << xml::xmlparser.test3.num2 << " " << xml::xmlparser.test3.num3 << std::endl;
 
+ 	if (!xml::test.load())
+	{
+		std::cout << "加载失败" << std::endl;
+		return 1;
+	}
+
+	for (auto &v : xml::test.skill)
+	{
+		std::cout << v.second.id << " " << v.second.name << std::endl;
+	}
+
+
 	std::cout << "----------------------------LUA---------------------------------------" << std::endl;
 	lua_State *L = luaL_newstate();
 	luaL_openlibs(L);
   xml::lua_xmlparser.doLoad2luaState(L);	
+	xml::lua_test.doLoad2luaState(L);
 	luaL_dofile(L, "./luadir/test.lua");
 
 	/*XMLDocument doc;

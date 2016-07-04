@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from xml.dom import minidom as xmlparser
-import os
+import os,time
 
 TemplateHead = """ 
 //----------------------------------------------------------------------
@@ -86,6 +86,11 @@ class XmlParser:
 
 	def parse_and_generator_cppfiles(self,templatepath,cppdirpath):
 		"""parse xml and generator cpp files"""
+
+		if os.path.exists(templatepath) == False:
+			print('没有找到模板文件:' + templatepath)
+			return
+
 		path_slice = templatepath.split('/')
 		path_slice = path_slice[-1]
 		if not path_slice.endswith('.xml'):
@@ -103,14 +108,26 @@ class XmlParser:
 		root  = doc.documentElement
 		blank = 0
 		cppfilename = cppdirpath + path_slice + '.h' 
-		cppfile = open(cppfilename,'w')	
 
+		#if file have exsit
+		if os.path.exists(cppfilename):
+      # if template file is newer than .h file, then generator, otherwise return;
+			cppmtime = time.ctime(os.path.getmtime(cppfilename))
+			templatemtime = time.ctime(os.path.getmtime(templatepath))
+			if cppmtime < templatemtime:
+				pass
+			else:
+				print(cppfilename+'已经是最新')	
+				return	
+	
+		cppfile = open(cppfilename,'w')	
 		self.dump_str2cppfile(cppfile,blank,TemplateHead)
 		self.dump_str2cppfile(cppfile,blank, 'namespace xml {')
 		self.parse_node(root, cppfile, blank+2, 1)					
 		self.dump_str2cppfile(cppfile,blank+2,'static struct ' + root.nodeName.upper() + ' ' + root.nodeName + ';\n')
 		self.parse_for_lua(root, cppfile, blank)
 		self.dump_str2cppfile(cppfile,blank,'}')
+		print('解析模板文件'+templatepath+'成功，生成文件：'+cppfilename)
 		cppfile.close()
 
 	def parse_node_generator_parsefunc(self,node,cppfile,blank):
@@ -503,7 +520,7 @@ if __name__ == '__main__':
 	dirname = '../xml/template/'
 	parser = XmlParser(dirname,"./")
 	parser.get_xml_files(dirname)
-	parser.dump()
+	#parser.dump()
 
 	for line in parser.xmlfiles_:
 		parser.parse_and_generator_cppfiles(line,'../src/')

@@ -1,4 +1,4 @@
-.PHONY : all clean ctags 
+.PHONY : all clean ctags xml 
 
 TARGET  = main
 OBJECTS = main.o \
@@ -23,6 +23,8 @@ clean:
 	@cd 3Party/lua ; make clean
 	@cd 3Party/tinyxml2 ; make clean
 
+xml:
+	@rm -rf main.o main;cd tools;python xmltool.py
+
 ctags:
 	@ctags -R .
-

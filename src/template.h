@@ -167,9 +167,9 @@ namespace xml {
           return true;
         }
       };
-      std::map<int,struct TEST3N> test3n;
-      typedef std::map<int,struct TEST3N>::iterator TEST3N_It;
-      typedef std::map<int,struct TEST3N>::const_iterator TEST3N_ConstIt;
+      std::vector<struct TEST3N> test3n;
+      typedef std::vector<struct TEST3N>::iterator TEST3N_It;
+      typedef std::vector<struct TEST3N>::const_iterator TEST3N_ConstIt;
 
       bool parse(const XMLElement* child)
       {
@@ -207,7 +207,7 @@ namespace xml {
             struct TEST3N temp_;
             if (temp_.parse(ele_begin))
             {
-              this->test3n.insert(std::pair<int, struct TEST3N>(temp_.id, temp_));
+              this->test3n.push_back(temp_);
             }
             if (ele_begin == ele_end) {
               break;
@@ -598,14 +598,11 @@ namespace xml {
               lua_pushstring(L,"test3n");
               lua_newtable(L);
             }
-            attri = ele_begin->FindAttribute("id");
-            if (attri) {
-              lua_pushinteger(L, Attribute_Parser<int>()(attri->Value()));
-              lua_newtable(L);
-              //recursive parse lua table!
-              this->test3n.parse(ele_begin, L);
-              lua_settable(L, -3);
-            }
+            lua_pushinteger(L,id+1);
+            lua_newtable(L);
+            //recursive parse lua table!
+            this->test3n.parse(ele_begin, L);
+            lua_settable(L, -3);
             if (ele_begin == ele_end) {
               lua_settable(L,-3);
               break;
